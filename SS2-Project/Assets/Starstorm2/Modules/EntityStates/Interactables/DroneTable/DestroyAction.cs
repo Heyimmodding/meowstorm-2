@@ -5,7 +5,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Networking;
 using static Moonstorm.Starstorm2.Interactables.DroneTable;
 
 namespace EntityStates.DroneTable
@@ -15,11 +14,9 @@ namespace EntityStates.DroneTable
 
         public static float duration;
 
-        public PickupIndex tempIndex;
+        public GameObject droneObject;
 
-        public int droneIndex;
-
-        public int itemIndex;
+        public PickupIndex index;
 
         public GameObject tempDrone;
 
@@ -41,16 +38,12 @@ namespace EntityStates.DroneTable
         {
             base.OnEnter();
             tempDrone = null;
-
+            
             var holo = this.gameObject.transform.Find("DroneHologramRoot");
             var scrapRoot = this.gameObject.transform.Find("ScrapRoot").gameObject;
             scrapRoot.SetActive(true);
 
-            tempIndex = PickupCatalog.FindPickupIndex((ItemIndex)itemIndex);
-
-            GameObject tempObject = BodyCatalog.GetBodyPrefab((BodyIndex)Util.UintToIntMinusOne((uint)droneIndex));
-
-            var locator = tempObject.GetComponent<ModelLocator>();
+            var locator = droneObject.GetComponent<ModelLocator>();
 
             //soundID = Util.PlaySound("Play_MULT_m1_sawblade_impact_loop", this.gameObject); //awesome
             Util.PlaySound("RefabricatorAction", this.gameObject);
@@ -58,7 +51,7 @@ namespace EntityStates.DroneTable
             {
                 var doubleTempDrone = locator.modelTransform.gameObject;
                 RefabricatorTriple outvar;
-                bool success = droneTripletPairs.TryGetValue(tempObject.name, out outvar);
+                bool success = droneTripletPairs.TryGetValue(droneObject.name, out outvar);
                 if (success)
                 {
                     tempDrone = UnityEngine.Object.Instantiate<GameObject>(doubleTempDrone, outvar.position, Quaternion.Euler(new Vector3(0,0,0)), holo);
@@ -71,7 +64,7 @@ namespace EntityStates.DroneTable
                     tempDrone = UnityEngine.Object.Instantiate<GameObject>(doubleTempDrone, holo.position, holo.rotation, holo);
                 }
 
-                if(tempObject.name == "MegaDroneBody")
+                if(droneObject.name == "MegaDroneBody")
                 {
                     try
                     {
@@ -82,19 +75,6 @@ namespace EntityStates.DroneTable
                         Debug.Log("failed to turn off megadrone stuff (" + e + ")");
                     }
                 }
-
-                if(tempObject.name == "ShockDroneBody")
-                {
-                    try
-                    {
-                        tempDrone.transform.Find("DroneBladeActive").transform.localScale = new Vector3(4, 4, 4);
-                    }
-                    catch (NullReferenceException e)
-                    {
-                        Debug.Log("failed to make shock drone propeller not look silly (" + e + ")");
-                    }
-                }
-
 
                 var locator2 = tempDrone.GetComponent<ChildLocator>(); //turn off clone drone sparks
                 if (locator2)
@@ -108,7 +88,7 @@ namespace EntityStates.DroneTable
 
                 }
 
-                var fans = tempDrone.GetComponentsInChildren<RotateObject>(true);
+                var fans = droneObject.GetComponentsInChildren<RotateObject>(true);
                 if(fans.Length > 0)
                 {
                     foreach (var fan in fans)
@@ -135,10 +115,11 @@ namespace EntityStates.DroneTable
                 }
 
                 tempModel = tempDrone.GetComponent<CharacterModel>();
+                SS2Log.Info("tempmodel: " + tempModel + " | " + tempModel.body);
                 if (tempModel)
                 { 
                     var render = tempModel.baseRendererInfos;
-                    switch (tempIndex.pickupDef.itemTier)
+                    switch (index.pickupDef.itemTier)
                     {
                         case ItemTier.Tier1:
                             for (int i = 0; i < render.Length; ++i)
@@ -175,7 +156,7 @@ namespace EntityStates.DroneTable
         public override void FixedUpdate()
         {
             base.FixedUpdate();
-            
+
             if (fixedAge > duration)
                 outer.SetNextStateToMain();
         }
@@ -202,26 +183,9 @@ namespace EntityStates.DroneTable
                 Destroy(tempDrone);
             }
 
-            if (NetworkServer.active)
-            {
-                var target = this.gameObject.transform.Find("PickupOrigin");
-                Vector3 vec = Vector3.up * 10 + target.forward * 4f;
-                PickupDropletController.CreatePickupDroplet(tempIndex, target.position, vec);
-            }
-
-        }
-
-        public override void OnSerialize(NetworkWriter writer)
-        {
-            base.OnSerialize(writer);
-            writer.Write(droneIndex);
-            writer.Write(itemIndex);
-        }
-        public override void OnDeserialize(NetworkReader reader)
-        {
-            base.OnDeserialize(reader);
-            droneIndex = reader.ReadInt32();
-            itemIndex = reader.ReadInt32();
+            var target = this.gameObject.transform.Find("PickupOrigin");
+            Vector3 vec = Vector3.up * 10 + target.forward * 4f;
+            PickupDropletController.CreatePickupDroplet(index, target.position, vec);
         }
     }
 }
